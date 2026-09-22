@@ -6,6 +6,7 @@ import { z } from "zod";
 import { PageShell, SectionHeading } from "@/components/site/Section";
 import { getSupabase } from "@/lib/supabase";
 import { CONTACT_EMAIL, SITE_URL } from "@/lib/site";
+import { sendContactEmail } from "@/lib/contact.functions";
 
 export const Route = createFileRoute("/contact")({
   head: () => ({
