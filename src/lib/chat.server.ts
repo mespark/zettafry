@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { CHAT_MODELS } from "./models";
 
 const partSchema = z.union([
   z.object({ type: z.literal("text"), text: z.string() }),
@@ -19,10 +18,14 @@ export const chatInputSchema = z.object({
     )
     .min(1)
     .max(40),
-  /** Optional preferred model id (admin console). Chain still applies after it. */
-  model: z.string().max(200).optional(),
   /** Extra field names the user always wants extracted. */
   customFields: z.array(z.string().min(1).max(60)).max(20).optional(),
+  /** Which provider this request should use — chosen by the user in the panel. */
+  provider: z.enum(["groq", "gemini", "openrouter"]),
+  /** The user's own key for that provider. Used once per request, never stored. */
+  apiKey: z.string().min(10).max(300),
+  /** Required for OpenRouter, optional override for Groq/Gemini. */
+  model: z.string().max(200).optional(),
 });
 
 export type ChatInput = z.infer<typeof chatInputSchema>;
@@ -83,31 +86,24 @@ export type ChatResult =
   | { ok: true; text: string; model: string; attempts: string[] }
   | { ok: false; error: string; attempts: string[] };
 
-const ENDPOINT = "https://router.huggingface.co/v1/chat/completions";
-
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
-/** Groq's vision-capable model. Override with GROQ_MODEL if the id changes. */
-const GROQ_MODEL = "qwen/qwen3.6-27b";
-/** Groq caps image parts per request for this model. */
+const DEFAULT_GROQ_MODEL = "qwen/qwen3.6-27b";
 const GROQ_MAX_IMAGES = 5;
 
 const GEMINI_MODEL = "gemini-2.5-flash-lite";
 
+const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-type CallOut =
-  | { text: string }
-  | { error: string; retryable: boolean; rateLimited?: boolean };
-
+type CallOut = { text: string } | { error: string; retryable: boolean; rateLimited?: boolean };
 
 /** Converts the OpenAI-style messages into Gemini contents (inline base64 parts). */
 function toGeminiContents(data: ChatInput) {
   return data.messages
     .filter((m) => m.role !== "system")
     .map((m) => {
-      const parts: Array<
-        { text: string } | { inlineData: { mimeType: string; data: string } }
-      > = [];
+      const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
       if (typeof m.content === "string") {
         if (m.content.trim()) parts.push({ text: m.content });
       } else {
@@ -118,9 +114,7 @@ function toGeminiContents(data: ChatInput) {
             const url = p.image_url.url;
             const match = /^data:([^;]+);base64,(.*)$/s.exec(url);
             if (match) {
-              parts.push({
-                inlineData: { mimeType: match[1] ?? "image/png", data: match[2] ?? "" },
-              });
+              parts.push({ inlineData: { mimeType: match[1] ?? "image/png", data: match[2] ?? "" } });
             } else {
               parts.push({ text: `[image: ${url}]` });
             }
@@ -132,7 +126,6 @@ function toGeminiContents(data: ChatInput) {
     });
 }
 
-/** Calls Gemini and normalizes the reply into the same { text } shape as HF. */
 async function callGemini(data: ChatInput, key: string): Promise<CallOut> {
   let res: Response;
   try {
@@ -140,14 +133,9 @@ async function callGemini(data: ChatInput, key: string): Promise<CallOut> {
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": key,
-        },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
         body: JSON.stringify({
-          systemInstruction: {
-            parts: [{ text: buildSystemPrompt(data.customFields) }],
-          },
+          systemInstruction: { parts: [{ text: buildSystemPrompt(data.customFields) }] },
           contents: toGeminiContents(data),
           generationConfig: { maxOutputTokens: 2000 },
         }),
@@ -160,10 +148,7 @@ async function callGemini(data: ChatInput, key: string): Promise<CallOut> {
   if (!res.ok) {
     const body = await res.text();
     if (res.status === 401 || res.status === 403) {
-      return {
-        error: "The Gemini key was rejected — check GEMINI_API_KEY.",
-        retryable: true,
-      };
+      return { error: "Ye Gemini key reject ho gayi — Settings me check karo.", retryable: false };
     }
     return {
       error: `Gemini failed (${res.status}). ${body.slice(0, 200)}`,
@@ -175,58 +160,8 @@ async function callGemini(data: ChatInput, key: string): Promise<CallOut> {
   const json = (await res.json()) as {
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
   };
-  const text = (json.candidates?.[0]?.content?.parts ?? [])
-    .map((p) => p.text ?? "")
-    .join("")
-    .trim();
+  const text = (json.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("").trim();
   if (!text) return { error: "Gemini returned an empty answer", retryable: true };
-  return { text };
-}
-
-async function callModel(
-  model: string,
-  data: ChatInput,
-  token: string,
-): Promise<CallOut> {
-  let res: Response;
-  try {
-    res = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: buildSystemPrompt(data.customFields) },
-          ...data.messages,
-        ],
-        max_tokens: 1500,
-      }),
-    });
-  } catch {
-    return { error: "Network error reaching the AI provider", retryable: true };
-  }
-
-  if (!res.ok) {
-    const body = await res.text();
-    if (res.status === 401) {
-      return { error: "The AI token was rejected — check HF_TOKEN.", retryable: false };
-    }
-    return {
-      error: `${model} failed (${res.status}). ${body.slice(0, 200)}`,
-      retryable: true,
-    };
-  }
-
-  const json = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  const text = json.choices?.[0]?.message?.content ?? "";
-  if (!text.trim()) {
-    return { error: `${model} returned an empty answer`, retryable: true };
-  }
   return { text };
 }
 
@@ -257,13 +192,8 @@ function sliceImages(data: ChatInput, from: number, to: number): ChatInput {
   return { ...data, messages } as ChatInput;
 }
 
-/** Parses a model reply into JSON when possible (strips markdown fences). */
 function parseLoose(text: string): unknown | undefined {
-  const cleaned = text
-    .trim()
-    .replace(/^```(?:json)?/i, "")
-    .replace(/```$/, "")
-    .trim();
+  const cleaned = text.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
   try {
     return JSON.parse(cleaned);
   } catch {
@@ -271,7 +201,6 @@ function parseLoose(text: string): unknown | undefined {
   }
 }
 
-/** Merges several batch replies into a single JSON array (or plain text). */
 function mergeTexts(texts: string[]): string {
   if (texts.length === 1) return texts[0] ?? "";
   const rows: unknown[] = [];
@@ -288,25 +217,15 @@ function mergeTexts(texts: string[]): string {
 }
 
 /** One Groq chat-completions request (OpenAI-compatible, JSON mode). */
-async function callGroqOnce(
-  data: ChatInput,
-  key: string,
-  model: string,
-): Promise<CallOut> {
+async function callGroqOnce(data: ChatInput, key: string, model: string): Promise<CallOut> {
   let res: Response;
   try {
     res = await fetch(GROQ_ENDPOINT, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
         model,
-        messages: [
-          { role: "system", content: buildSystemPrompt(data.customFields) },
-          ...data.messages,
-        ],
+        messages: [{ role: "system", content: buildSystemPrompt(data.customFields) }, ...data.messages],
         max_tokens: 1500,
         response_format: { type: "json_object" },
       }),
@@ -318,10 +237,7 @@ async function callGroqOnce(
   if (!res.ok) {
     const body = await res.text();
     if (res.status === 401 || res.status === 403) {
-      return {
-        error: "The Groq key was rejected — check GROQ_API_KEY.",
-        retryable: true,
-      };
+      return { error: "Ye Groq key reject ho gayi — Settings me check karo.", retryable: false };
     }
     return {
       error: `Groq failed (${res.status}). ${body.slice(0, 200)}`,
@@ -330,30 +246,20 @@ async function callGroqOnce(
     };
   }
 
-  const json = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
+  const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
   const text = json.choices?.[0]?.message?.content ?? "";
   if (!text.trim()) return { error: "Groq returned an empty answer", retryable: true };
   return { text };
 }
 
-/**
- * Calls Groq, batching images 5 at a time (its per-request limit) and merging
- * the batch replies, with one 1.5s exponential-backoff retry on a 429.
- */
+/** Batches images 5 at a time (Groq's per-request limit) and merges replies. */
 async function callGroq(data: ChatInput, key: string, model: string): Promise<CallOut> {
   const images = countImages(data);
-  const batches =
-    images > GROQ_MAX_IMAGES ? Math.ceil(images / GROQ_MAX_IMAGES) : 1;
+  const batches = images > GROQ_MAX_IMAGES ? Math.ceil(images / GROQ_MAX_IMAGES) : 1;
 
   const texts: string[] = [];
   for (let b = 0; b < batches; b++) {
-    const input =
-      batches === 1
-        ? data
-        : sliceImages(data, b * GROQ_MAX_IMAGES, (b + 1) * GROQ_MAX_IMAGES);
-
+    const input = batches === 1 ? data : sliceImages(data, b * GROQ_MAX_IMAGES, (b + 1) * GROQ_MAX_IMAGES);
     let out = await callGroqOnce(input, key, model);
     if ("error" in out && out.rateLimited) {
       await sleep(1500);
@@ -362,53 +268,80 @@ async function callGroq(data: ChatInput, key: string, model: string): Promise<Ca
     if ("error" in out) return out;
     texts.push(out.text);
   }
-
   return { text: mergeTexts(texts) };
 }
 
-export async function runChat(data: ChatInput): Promise<ChatResult> {
-  const token = process.env["HF_TOKEN"];
-  const groqKey = process.env["GROQ_API_KEY"];
-  const groqModel = process.env["GROQ_MODEL"] || GROQ_MODEL;
+/** OpenRouter — OpenAI-compatible, model id chosen by the user. */
+async function callOpenRouter(data: ChatInput, key: string, model: string): Promise<CallOut> {
+  let res: Response;
+  try {
+    res = await fetch(OPENROUTER_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+        "HTTP-Referer": "https://zettafry.mespark.in",
+        "X-Title": "Zettafry",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: buildSystemPrompt(data.customFields) }, ...data.messages],
+        max_tokens: 1500,
+      }),
+    });
+  } catch {
+    return { error: "Network error reaching OpenRouter", retryable: true };
+  }
 
-  if (!token && !groqKey) {
+  if (!res.ok) {
+    const body = await res.text();
+    if (res.status === 401 || res.status === 403) {
+      return { error: "Ye OpenRouter key reject ho gayi — Settings me check karo.", retryable: false };
+    }
     return {
-      ok: false,
-      attempts: [],
-      error:
-        "AI is not configured yet — add the GROQ_API_KEY (or HF_TOKEN) environment variable and reload.",
+      error: `OpenRouter failed (${res.status}). ${body.slice(0, 200)}`,
+      retryable: true,
+      rateLimited: res.status === 429,
     };
   }
 
-  const attempts: string[] = [];
-  let lastError = "All models are unavailable right now — try again shortly.";
-
-  // Primary provider: Groq.
-  if (groqKey && !data.model) {
-    attempts.push(`groq:${groqModel}`);
-    const out = await callGroq(data, groqKey, groqModel);
-    if ("text" in out) {
-      return { ok: true, text: out.text, model: `groq:${groqModel}`, attempts };
-    }
-    lastError = out.error;
-  }
-
-  if (!token) return { ok: false, error: lastError, attempts };
-
-  // Fallback chain: the existing Hugging Face models, in their current order.
-  const chain = CHAT_MODELS.map((m) => m.id);
-  const order = data.model
-    ? [data.model, ...chain.filter((m) => m !== data.model)]
-    : chain;
-
-  for (const model of order) {
-    attempts.push(model);
-    const out = await callModel(model, data, token);
-    if ("text" in out) return { ok: true, text: out.text, model, attempts };
-    lastError = out.error;
-    if (!out.retryable) break;
-  }
-
-  return { ok: false, error: lastError, attempts };
+  const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  const text = json.choices?.[0]?.message?.content ?? "";
+  if (!text.trim()) return { error: "OpenRouter returned an empty answer", retryable: true };
+  return { text };
 }
 
+export async function runChat(data: ChatInput): Promise<ChatResult> {
+  const key = data.apiKey?.trim();
+  if (!key) {
+    return { ok: false, attempts: [], error: "Koi API key nahi mili — Settings panel se apni key set karo." };
+  }
+
+  if (data.provider === "groq") {
+    const model = data.model?.trim() || DEFAULT_GROQ_MODEL;
+    const out = await callGroq(data, key, model);
+    const tag = `groq:${model}`;
+    return "text" in out
+      ? { ok: true, text: out.text, model: tag, attempts: [tag] }
+      : { ok: false, error: out.error, attempts: [tag] };
+  }
+
+  if (data.provider === "gemini") {
+    const out = await callGemini(data, key);
+    const tag = `gemini:${GEMINI_MODEL}`;
+    return "text" in out
+      ? { ok: true, text: out.text, model: tag, attempts: [tag] }
+      : { ok: false, error: out.error, attempts: [tag] };
+  }
+
+  // openrouter — model id is required, chosen by the user in the panel.
+  const model = data.model?.trim();
+  if (!model) {
+    return { ok: false, attempts: [], error: "OpenRouter ke liye model ID bhi daalo Settings me." };
+  }
+  const out = await callOpenRouter(data, key, model);
+  const tag = `openrouter:${model}`;
+  return "text" in out
+    ? { ok: true, text: out.text, model: tag, attempts: [tag] }
+    : { ok: false, error: out.error, attempts: [tag] };
+}
