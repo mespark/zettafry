@@ -1,8 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ApiKeyPanel } from "@/components/site/ApiKeyPanel";
-import { getUserApiKey } from "@/lib/user-keys";
-import { Settings } from "lucide-react"; 
 import {
   ArrowUp,
   Camera,
