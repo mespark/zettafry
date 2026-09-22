@@ -14,6 +14,7 @@ import {
   MessageSquare,
   Paperclip,
   Plus,
+  Settings,
   Sparkles,
   Trash2,
   X,
@@ -26,7 +27,9 @@ import { BrandMark } from "@/components/site/BrandMark";
 import { useSession } from "@/lib/use-session";
 import { sendChat } from "@/lib/chat.functions";
 import { fileToAttachments } from "@/lib/attachments";
-import { MODEL_PREF_KEY, isAdminEmail } from "@/lib/models";
+import { isAdminEmail } from "@/lib/models";
+import { ApiKeyPanel } from "@/components/site/ApiKeyPanel";
+import { getUserApiKey } from "@/lib/user-keys";
 import { downloadExcel, parseRecords, type Row } from "@/lib/excel";
 import { formatReset, getLimits } from "@/lib/quota";
 import { fetchUsage, saveExtraction, spendUsage } from "@/lib/usage-client";
@@ -87,7 +90,7 @@ function ConsolePage() {
   const [edits, setEdits] = useState<Record<string, Row[]>>({});
   const [bulk, setBulk] = useState(false);
   const [bulkFiles, setBulkFiles] = useState<File[]>([]);
-
+  const [keyPanelOpen, setKeyPanelOpen] = useState(false);
   const unlimited = isAdminEmail(user?.email);
   const messagesLeft = unlimited ? Infinity : Math.max(0, limits.messages - usage.messages);
   const filesLeft = unlimited ? Infinity : Math.max(0, limits.files - usage.files);
@@ -184,6 +187,11 @@ function ConsolePage() {
     const all = Array.from(files);
     const singleZip = all.length === 1 && all[0]!.name.toLowerCase().endsWith(".zip");
     if (all.length > 1 && !singleZip) {
+      if (!getUserApiKey()) {
+        setKeyPanelOpen(true);
+        if (fileRef.current) fileRef.current.value = "";
+        return;
+      }
       setBulkFiles(all);
       setBulk(true);
       if (fileRef.current) fileRef.current.value = "";
@@ -227,8 +235,13 @@ function ConsolePage() {
       );
       return;
     }
-    if (text.length > 1500) {
+     if (text.length > 1500) {
       toast.error("Message is too long — keep it under 1500 characters.");
+      return;
+    }
+    const savedKey = getUserApiKey();
+    if (!savedKey) {
+      setKeyPanelOpen(true);
       return;
     }
 
@@ -287,16 +300,13 @@ function ConsolePage() {
         return { role: m.role, content: parts };
       });
 
-      const preferred =
-        unlimited && typeof window !== "undefined"
-          ? (window.localStorage.getItem(MODEL_PREF_KEY) ?? undefined)
-          : undefined;
-      const result = await sendChat({
+        const result = await sendChat({
         data: {
           messages: payload,
-          ...(preferred ? { model: preferred } : {}),
           ...(customFields.length ? { customFields } : {}),
-
+          provider: savedKey.provider,
+          apiKey: savedKey.apiKey,
+          ...(savedKey.model ? { model: savedKey.model } : {}),
         },
       });
       const reply: ChatMessage = {
@@ -473,7 +483,15 @@ function ConsolePage() {
               Zettafry · invoice extraction assistant
             </p>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+         <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => setKeyPanelOpen(true)}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary/40 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+              title="AI provider settings"
+            >
+              <Settings className="size-3.5" />
+              <span className="hidden sm:inline">Settings</span>
+            </button>
             {threadRecords.length ? (
               <button
                 onClick={() => downloadExcel(threadRecords, "zettafry-conversation")}
@@ -652,7 +670,13 @@ function ConsolePage() {
             </p>
           </div>
         </div>
-      </main>
+       </main>
+
+      <ApiKeyPanel
+        open={keyPanelOpen}
+        onOpenChange={setKeyPanelOpen}
+        onSaved={() => toast.success("API key saved — ab chat bhej sakte ho.")}
+      />
 
       <CameraCapture
         open={camera}
@@ -668,15 +692,13 @@ function ConsolePage() {
           }
           toast.success("Photo attached");
         }}
-      />
-
       <BulkProcess
         open={bulk}
         files={bulkFiles}
         allowance={unlimited ? Infinity : Math.min(filesLeft, messagesLeft)}
-        {...(unlimited && typeof window !== "undefined" && window.localStorage.getItem(MODEL_PREF_KEY)
-          ? { model: window.localStorage.getItem(MODEL_PREF_KEY)! }
-          : {})}
+        provider={getUserApiKey()?.provider ?? "groq"}
+        apiKey={getUserApiKey()?.apiKey ?? ""}
+        {...(getUserApiKey()?.model ? { model: getUserApiKey()!.model } : {})}
         {...(customFields.length ? { customFields } : {})}
         onSpend={() => {
           if (!user) return;
