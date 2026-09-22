@@ -113,6 +113,8 @@ export function BulkProcess({
   files,
   onClose,
   onFinish,
+  provider,
+  apiKey,
   model,
   customFields,
   allowance,
@@ -123,6 +125,10 @@ export function BulkProcess({
   onClose: () => void;
   /** Called once when the batch finishes, so a summary can land in the chat. */
   onFinish: (summary: { total: number; ok: number; failed: number; rows: Row[] }) => void;
+  /** Which AI provider to use — comes from the user's saved key in Settings. */
+  provider: "groq" | "gemini" | "openrouter";
+  /** The user's own API key for that provider. */
+  apiKey: string;
   model?: string;
   customFields?: string[];
   /** How many files may still be processed today (Infinity for owners). */
@@ -202,9 +208,11 @@ export function BulkProcess({
       for (const a of atts.filter((x) => x.kind === "image")) {
         parts.push({ type: "image_url", image_url: { url: a.data } });
       }
-      const result = await sendChat({
+       const result = await sendChat({
         data: {
           messages: [{ role: "user" as const, content: parts }],
+          provider,
+          apiKey,
           ...(model ? { model } : {}),
           ...(customFields?.length ? { customFields } : {}),
         },
