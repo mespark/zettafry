@@ -64,5 +64,3 @@ export const isAdminEmail = (email?: string | null) =>
 /** localStorage key holding the admin's preferred first model. */
 export const MODEL_PREF_KEY = "vyom.model.pref";
 
-export const isAdminEmail = (email?: string | null) =>
-  (email ?? "").trim().toLowerCase() === ADMIN_EMAIL;
