@@ -66,12 +66,10 @@ async function verifyEmail(authHeader: string): Promise<string | null> {
     return null;
   }
 }
-
 async function verifyAdmin(authHeader: string): Promise<boolean> {
   const email = await verifyEmail(authHeader);
-  return !!email && email.trim().toLowerCase() === ADMIN_EMAIL;
+  return isAdminEmail(email);
 }
-
 export type AppConfig = {
   preferredModel: string | null;
   limits: { messages: number; files: number };
