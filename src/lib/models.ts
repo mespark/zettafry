@@ -54,8 +54,12 @@ export const MODEL_CHAIN: ModelInfo[] = [
 
 export const CHAT_MODELS = MODEL_CHAIN.filter((m) => m.chat !== false);
 
+const ADMIN_EMAIL = (import.meta.env["VITE_ADMIN_EMAIL"] as string | undefined)
+  ?.trim()
+  .toLowerCase() ?? "";
+
 export const isAdminEmail = (email?: string | null) =>
-  (email ?? "").trim().toLowerCase() === ADMIN_EMAIL;
+  !!ADMIN_EMAIL && (email ?? "").trim().toLowerCase() === ADMIN_EMAIL;
 
 /** localStorage key holding the admin's preferred first model. */
 export const MODEL_PREF_KEY = "vyom.model.pref";
