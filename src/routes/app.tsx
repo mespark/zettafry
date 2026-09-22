@@ -692,6 +692,7 @@ function ConsolePage() {
           }
           toast.success("Photo attached");
         }}
+      />
       <BulkProcess
         open={bulk}
         files={bulkFiles}
