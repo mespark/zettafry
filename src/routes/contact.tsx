@@ -5,8 +5,8 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { PageShell, SectionHeading } from "@/components/site/Section";
 import { getSupabase } from "@/lib/supabase";
-import { CONTACT_EMAIL, SITE_URL } from "@/lib/site";
 import { sendContactEmail } from "@/lib/contact.functions";
+import { CONTACT_EMAIL, SITE_URL } from "@/lib/site";
 
 export const Route = createFileRoute("/contact")({
   head: () => ({
@@ -64,7 +64,7 @@ function ContactPage() {
       return;
     }
 
-        const { error } = await supabase.from("contact_messages").insert({
+    const { error } = await supabase.from("contact_messages").insert({
       name: parsed.data.name,
       email: parsed.data.email,
       company: parsed.data.company || null,
@@ -88,6 +88,7 @@ function ContactPage() {
     setSending(false);
     toast.success("Thanks — we'll get back to you within one business day.");
     formEl.reset();
+  };
 
   const field =
     "w-full rounded-xl border border-border bg-input/30 px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/60 focus:ring-2 focus:ring-primary/30";
