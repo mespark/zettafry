@@ -54,7 +54,8 @@ export const MODEL_CHAIN: ModelInfo[] = [
 
 export const CHAT_MODELS = MODEL_CHAIN.filter((m) => m.chat !== false);
 
-export const ADMIN_EMAIL = "sparkox19711@gmail.com";
+export const isAdminEmail = (email?: string | null) =>
+  (email ?? "").trim().toLowerCase() === ADMIN_EMAIL;
 
 /** localStorage key holding the admin's preferred first model. */
 export const MODEL_PREF_KEY = "vyom.model.pref";
