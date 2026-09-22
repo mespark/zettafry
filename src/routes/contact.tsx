@@ -64,21 +64,30 @@ function ContactPage() {
       return;
     }
 
-    const { error } = await supabase.from("contact_messages").insert({
+        const { error } = await supabase.from("contact_messages").insert({
       name: parsed.data.name,
       email: parsed.data.email,
       company: parsed.data.company || null,
       message: parsed.data.message,
     });
 
-    setSending(false);
     if (error) {
+      setSending(false);
       toast.error(`Couldn't send — please email us directly at ${CONTACT_EMAIL}.`);
       return;
     }
+
+    // Best-effort email notification — the message is already saved above,
+    // so a failure here doesn't block the user.
+    try {
+      await sendContactEmail({ data: parsed.data });
+    } catch {
+      // swallow — DB insert already succeeded
+    }
+
+    setSending(false);
     toast.success("Thanks — we'll get back to you within one business day.");
     formEl.reset();
-  };
 
   const field =
     "w-full rounded-xl border border-border bg-input/30 px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/60 focus:ring-2 focus:ring-primary/30";
