@@ -1,7 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-
-import { ADMIN_EMAIL } from "./models";
+import { isAdminEmail } from "./models";
 import { DEFAULT_LIMITS } from "./quota";
 
 /** Service-role client — server only, never expose this key to the browser. */
