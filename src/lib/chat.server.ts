@@ -148,7 +148,7 @@ async function callGemini(data: ChatInput, key: string): Promise<CallOut> {
   if (!res.ok) {
     const body = await res.text();
     if (res.status === 401 || res.status === 403) {
-      return { error: "Ye Gemini key reject ho gayi — Settings me check karo.", retryable: false };
+      return { error: "This Gemini key was rejected — check it in Settings.", retryable: false };
     }
     return {
       error: `Gemini failed (${res.status}). ${body.slice(0, 200)}`,
@@ -237,7 +237,7 @@ async function callGroqOnce(data: ChatInput, key: string, model: string): Promis
   if (!res.ok) {
     const body = await res.text();
     if (res.status === 401 || res.status === 403) {
-      return { error: "Ye Groq key reject ho gayi — Settings me check karo.", retryable: false };
+      return { error: "This Groq key was rejected — check it in Settings.", retryable: false };
     }
     return {
       error: `Groq failed (${res.status}). ${body.slice(0, 200)}`,
@@ -296,7 +296,7 @@ async function callOpenRouter(data: ChatInput, key: string, model: string): Prom
   if (!res.ok) {
     const body = await res.text();
     if (res.status === 401 || res.status === 403) {
-      return { error: "Ye OpenRouter key reject ho gayi — Settings me check karo.", retryable: false };
+      return { error: "This OpenRouter key was rejected — check it in Settings.", retryable: false };
     }
     return {
       error: `OpenRouter failed (${res.status}). ${body.slice(0, 200)}`,
@@ -314,7 +314,7 @@ async function callOpenRouter(data: ChatInput, key: string, model: string): Prom
 export async function runChat(data: ChatInput): Promise<ChatResult> {
   const key = data.apiKey?.trim();
   if (!key) {
-    return { ok: false, attempts: [], error: "Koi API key nahi mili — Settings panel se apni key set karo." };
+    return { ok: false, attempts: [], error: "No API key found — add your own key from the Settings panel." };
   }
 
   if (data.provider === "groq") {
@@ -337,7 +337,7 @@ export async function runChat(data: ChatInput): Promise<ChatResult> {
   // openrouter — model id is required, chosen by the user in the panel.
   const model = data.model?.trim();
   if (!model) {
-    return { ok: false, attempts: [], error: "OpenRouter ke liye model ID bhi daalo Settings me." };
+    return { ok: false, attempts: [], error: "OpenRouter also needs a model ID — set it in Settings." };
   }
   const out = await callOpenRouter(data, key, model);
   const tag = `openrouter:${model}`;
@@ -345,3 +345,4 @@ export async function runChat(data: ChatInput): Promise<ChatResult> {
     ? { ok: true, text: out.text, model: tag, attempts: [tag] }
     : { ok: false, error: out.error, attempts: [tag] };
 }
+
