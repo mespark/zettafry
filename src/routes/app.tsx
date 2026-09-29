@@ -26,6 +26,7 @@ import { sendChat } from "@/lib/chat.functions";
 import { fileToAttachments } from "@/lib/attachments";
 import { isAdminEmail } from "@/lib/models";
 import { ApiKeyPanel } from "@/components/site/ApiKeyPanel";
+import { Reveal } from "@/components/site/Reveal";
 import { getUserApiKey } from "@/lib/user-keys";
 import { downloadExcel, parseRecords, type Row } from "@/lib/excel";
 import { formatReset, getLimits } from "@/lib/quota";
@@ -212,8 +213,12 @@ function ConsolePage() {
         setPending((prev) => [...prev, ...atts].slice(0, 10));
         used += 1;
         if (user) {
-          const res = await spendUsage({ files: 1 }, { limits, unlimited });
-          if (res.usage) setUsage(res.usage);
+          try {
+            const res = await spendUsage({ files: 1 }, { limits, unlimited });
+            if (res.usage) setUsage(res.usage);
+          } catch {
+            toast.error("Could not update your usage count — continuing anyway.");
+          }
         }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Could not read file");
@@ -263,16 +268,22 @@ function ConsolePage() {
     setPending([]);
     setBusy(true);
     if (user) {
-      const res = await spendUsage({ messages: 1 }, { limits, unlimited });
-      if (res.usage) setUsage(res.usage);
-      if (!res.ok && !unlimited) {
-        setBusy(false);
-        toast.error(
-          res.error === "Unauthorized"
-            ? "Session expired — sign in again."
-            : `You have reached your free daily limit of ${limits.messages} messages. Resets in ${formatReset()}.`,
-        );
-        return;
+      try {
+        const res = await spendUsage({ messages: 1 }, { limits, unlimited });
+        if (res.usage) setUsage(res.usage);
+        if (!res.ok && !unlimited) {
+          setBusy(false);
+          toast.error(
+            res.error === "Unauthorized"
+              ? "Session expired — sign in again."
+              : `You have reached your free daily limit of ${limits.messages} messages. Resets in ${formatReset()}.`,
+          );
+          return;
+        }
+      } catch {
+        // Usage tracking is best-effort — a transient Supabase error here
+        // must never block the actual chat request from going through.
+        toast.error("Could not update your usage count — continuing anyway.");
       }
     }
 
@@ -500,14 +511,6 @@ function ConsolePage() {
               </button>
             ) : null}
 
-            {unlimited ? (
-              <Link
-                to="/admin"
-                className="rounded-full border border-primary/50 px-3 py-1.5 text-[11px] uppercase tracking-widest text-primary"
-              >
-                Admin
-              </Link>
-            ) : null}
             <span className="hidden rounded-full border border-border bg-secondary/40 px-3 py-1.5 text-[11px] text-muted-foreground sm:inline">
               {unlimited
                 ? "Owner · unlimited"
@@ -519,8 +522,9 @@ function ConsolePage() {
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-3xl px-4 py-8">
             {!active?.messages.length ? (
+              <Reveal>
               <div className="mt-10 text-center">
-                <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary/15">
+                <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-primary/15 shadow-[0_0_40px_-12px_var(--glow)]">
                   <Sparkles className="size-6 text-primary" />
                 </div>
                 <h2 className="mt-5 font-display text-2xl">
@@ -547,6 +551,7 @@ function ConsolePage() {
                   ))}
                 </div>
               </div>
+              </Reveal>
             ) : (
               <div className="space-y-6">
                 {active.messages.map((m) => (
@@ -560,7 +565,7 @@ function ConsolePage() {
                 {busy && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="size-4 animate-spin text-primary" />
-                    Zettafry is reading…
+                    Reading your document…
                   </div>
                 )}
               </div>
@@ -846,3 +851,4 @@ function Bubble({
     </div>
   );
 }
+
