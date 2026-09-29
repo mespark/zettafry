@@ -31,9 +31,9 @@ const PROVIDER_INFO: Record<Provider, ProviderMeta> = {
     helpUrl: "https://console.groq.com/keys",
     helpLabel: "console.groq.com/keys",
     steps: [
-      "console.groq.com pe free account banao — credit card nahi chahiye.",
-      "Left sidebar me \"API Keys\" par jao, \"Create API Key\" dabao.",
-      "Generate hui key copy karke yahan paste karo.",
+      "Create a free account at console.groq.com — no credit card required.",
+      "Open \"API Keys\" in the left sidebar and click \"Create API Key\".",
+      "Copy the generated key and paste it below.",
     ],
   },
   gemini: {
@@ -42,9 +42,9 @@ const PROVIDER_INFO: Record<Provider, ProviderMeta> = {
     helpUrl: "https://aistudio.google.com/apikey",
     helpLabel: "aistudio.google.com/apikey",
     steps: [
-      "aistudio.google.com/apikey pe apne Google account se jao.",
-      "\"Create API key\" dabao — free tier extraction ke liye kaafi hai.",
-      "Key copy karke yahan paste karo.",
+      "Go to aistudio.google.com/apikey and sign in with your Google account.",
+      "Click \"Create API key\" — the free tier is enough for extraction.",
+      "Copy the key and paste it below.",
     ],
   },
   openrouter: {
@@ -53,10 +53,10 @@ const PROVIDER_INFO: Record<Provider, ProviderMeta> = {
     helpUrl: "https://openrouter.ai/keys",
     helpLabel: "openrouter.ai/keys",
     steps: [
-      "openrouter.ai pe sign up karo.",
-      "Settings → Keys me \"Create Key\" dabao.",
-      "Kuch models free hain, baaki ke liye thode $ credits add karne honge.",
-      "Neeche model ID bhi daalo — jaise ek vision model: \"qwen/qwen2.5-vl-72b-instruct\".",
+      "Sign up at openrouter.ai.",
+      "Go to Settings → Keys and click \"Create Key\".",
+      "Some models are free; others need a small top-up of credits.",
+      "Also enter a model ID below — for example, a vision model like \"qwen/qwen2.5-vl-72b-instruct\".",
     ],
     needsModel: true,
     modelPlaceholder: "e.g. qwen/qwen2.5-vl-72b-instruct",
@@ -95,11 +95,11 @@ export function ApiKeyPanel({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <KeyRound className="h-5 w-5" /> Apna AI provider connect karo
+            <KeyRound className="h-5 w-5" /> Connect your AI provider
           </DialogTitle>
           <DialogDescription>
-            Zettafry koi shared server key use nahi karta — apni free API key daalo.
-            Ye sirf tumhare is browser mein save hoti hai, humare server pe kabhi store nahi hoti.
+            Zettafry doesn&apos;t use a shared server key — add your own free API key instead.
+            It&apos;s saved only in this browser and is never stored on our servers.
           </DialogDescription>
         </DialogHeader>
 
@@ -113,7 +113,7 @@ export function ApiKeyPanel({
           {(Object.keys(PROVIDER_INFO) as Provider[]).map((p) => (
             <TabsContent key={p} value={p} className="space-y-4 pt-3">
               <div className="space-y-2">
-                <Label htmlFor={`${p}-key`}>{PROVIDER_INFO[p].label} API Key</Label>
+                <Label htmlFor={`${p}-key`}>{PROVIDER_INFO[p].label} API key</Label>
                 <Input
                   id={`${p}-key`}
                   type="password"
@@ -137,7 +137,7 @@ export function ApiKeyPanel({
               )}
 
               <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
-                <p className="mb-2 font-medium text-foreground">API key kaha se milegi:</p>
+                <p className="mb-2 font-medium text-foreground">How to get this key:</p>
                 <ol className="list-decimal space-y-1 pl-4 text-muted-foreground">
                   {PROVIDER_INFO[p].steps.map((s) => (
                     <li key={s}>{s}</li>
