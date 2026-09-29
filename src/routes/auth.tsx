@@ -217,9 +217,13 @@ function AuthPage() {
         <div className="glass animate-rise rounded-3xl p-8">
           <div className="flex flex-col items-center text-center">
             <BrandMark className="size-16" />
-            <h1 className="mt-5 font-display text-2xl font-semibold">Zettafry — Bills to Excel</h1>
+            <h1 className="mt-5 font-display text-2xl font-semibold">Sign in to Zettafry</h1>
             <p className="mt-1 text-xs uppercase tracking-[0.3em] text-muted-foreground">
               Intelligence. Automated.
+            </p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              New here? The same form below creates your account automatically — there&apos;s no
+              separate sign-up step.
             </p>
           </div>
 
