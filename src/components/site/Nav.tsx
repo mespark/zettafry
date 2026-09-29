@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { BrandMark } from "@/components/site/BrandMark";
 import { useSession } from "@/lib/use-session";
-import { isAdminEmail } from "@/lib/models";
 
 
 const links = [
@@ -17,8 +16,7 @@ const links = [
 export function Nav() {
   const [open, setOpen] = useState(false);
   const { user } = useSession();
-  const isAdmin = isAdminEmail(user?.email);
-  const consoleTo = user ? (isAdmin ? "/admin" : "/app") : "/auth";
+  const consoleTo = user ? "/app" : "/auth";
   const consoleLabel = user ? "Open console" : "Sign in";
 
 
