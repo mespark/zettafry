@@ -114,6 +114,19 @@ function Index() {
         </div>
       </section>
 
+      <Reveal>
+        <section className="mx-auto max-w-3xl px-5 py-14 text-center sm:py-16">
+          <h2 className="text-2xl font-semibold sm:text-3xl">What is Zettafry?</h2>
+          <p className="mt-4 text-muted-foreground">
+            Zettafry is an AI tool that reads bills, receipts and invoices — uploaded, scanned or
+            photographed — and converts them into clean, structured Excel data in minutes. Invoice
+            numbers, GST, vendor names, line items, quantities, prices, taxes and totals, extracted
+            automatically. Built by Ravi Yadav (mespark) for anyone tired of typing bills into
+            spreadsheets by hand.
+          </p>
+        </section>
+      </Reveal>
+
       <section id="pricing" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-20 sm:px-6 sm:py-24">
         <SectionHeading
           eyebrow="Pricing"
@@ -221,3 +234,4 @@ function Index() {
     </div>
   );
 }
+
